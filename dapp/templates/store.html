@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}API Store — Broken Shop{% endblock %}
+
+{% block content %}
+<div class="hero p-4 p-md-5 mb-4">
+    <h1 class="fw-bold mb-1">API Store</h1>
+    <p class="mb-0 opacity-75">
+        This page is a JavaScript app that talks to the Broken Shop REST API using a
+        <strong>Bearer token</strong>. Watch the requests in Burp / DevTools &rarr; Network.
+    </p>
+</div>
+
+<div class="row g-4">
+    <!-- ================= Auth panel ================= -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h2 class="h5 mb-3"><i class="bi bi-key"></i> Token</h2>
+
+                <div id="loggedOut">
+                    <div class="mb-2">
+                        <input id="username" class="form-control form-control-sm mb-2" placeholder="username" value="alice">
+                        <input id="password" type="password" class="form-control form-control-sm" placeholder="password" value="Passw0rd!">
+                    </div>
+                    <button class="btn btn-primary btn-sm w-100" onclick="apiLogin()">Login via API</button>
+                    <p class="small text-muted mt-2 mb-0">Calls <code>POST /api/login/</code> and stores the returned token.</p>
+                </div>
+
+                <div id="loggedIn" style="display:none">
+                    <p class="small mb-1">Logged in as <strong id="whoami">?</strong></p>
+                    <p class="small text-muted mb-1">Bearer token (in <code>localStorage</code>):</p>
+                    <code id="tokenView" class="d-block text-truncate small bg-light p-2 rounded mb-2"></code>
+                    <button class="btn btn-outline-secondary btn-sm w-100" onclick="apiLogout()">Clear token</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 mb-3"><i class="bi bi-cart3"></i> Cart (via API)</h2>
+                <label class="form-label small mb-1">user_id</label>
+                <div class="input-group input-group-sm mb-2">
+                    <input id="cartUserId" class="form-control" placeholder="(defaults to me)">
+                    <button class="btn btn-primary" onclick="loadCart()">Load</button>
+                </div>
+                <p class="small text-muted">
+                    Calls <code>GET /api/cart/?user_id=</code> with your token. Try another
+                    user's id and see whose cart comes back.
+                </p>
+                <div id="cartResult" class="small"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= Products ================= -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h5 mb-0"><i class="bi bi-box-seam"></i> Products (via API)</h2>
+                    <div class="input-group input-group-sm" style="max-width:260px">
+                        <input id="q" class="form-control" placeholder="Search...">
+                        <button class="btn btn-primary" onclick="loadProducts()">Search</button>
+                    </div>
+                </div>
+                <div id="products" class="row g-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ---- tiny API client -----------------------------------------------------
+const API = "/api";
+function token() { return localStorage.getItem("bs_token"); }
+
+function refreshAuthUI() {
+    const t = token();
+    document.getElementById("loggedOut").style.display = t ? "none" : "block";
+    document.getElementById("loggedIn").style.display  = t ? "block" : "none";
+    if (t) {
+        document.getElementById("tokenView").textContent = t;
+        document.getElementById("whoami").textContent = localStorage.getItem("bs_user") || "?";
+    }
+}
+
+async function apiLogin() {
+    const res = await fetch(`${API}/login/`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value
+        })
+    });
+    const data = await res.json();
+    if (data.token) {
+        localStorage.setItem("bs_token", data.token);      // stored client-side
+        localStorage.setItem("bs_user", document.getElementById("username").value);
+        refreshAuthUI();
+        loadCart();
+    } else {
+        alert("Login failed: " + (data.error || res.status));
+    }
+}
+
+function apiLogout() {
+    localStorage.removeItem("bs_token");
+    localStorage.removeItem("bs_user");
+    document.getElementById("cartResult").innerHTML = "";
+    refreshAuthUI();
+}
+
+async function loadProducts() {
+    const q = encodeURIComponent(document.getElementById("q").value);
+    const res = await fetch(`${API}/products/?q=${q}`);
+    const data = await res.json();
+    const box = document.getElementById("products");
+    box.innerHTML = "";
+    (data.results || []).forEach(p => {
+        box.insertAdjacentHTML("beforeend", `
+            <div class="col-sm-6 col-xl-4">
+              <div class="card h-100 border">
+                <div class="card-body">
+                  <span class="badge cat-badge mb-2">#${p.id}</span>
+                  <h3 class="h6">${p.name}</h3>
+                  <div class="price">$${p.price}</div>
+                </div>
+              </div>
+            </div>`);
+    });
+    if (!(data.results || []).length) box.innerHTML = '<p class="text-muted small">No products.</p>';
+}
+
+async function loadCart() {
+    if (!token()) { document.getElementById("cartResult").innerHTML =
+        '<span class="text-muted">Log in first to send a Bearer token.</span>'; return; }
+    const uid = encodeURIComponent(document.getElementById("cartUserId").value);
+    const res = await fetch(`${API}/cart/?user_id=${uid}`, {
+        headers: {"Authorization": "Bearer " + token()}   // <-- token sent here
+    });
+    if (res.status === 401) { document.getElementById("cartResult").innerHTML =
+        '<span class="text-danger">401 — token missing/invalid.</span>'; return; }
+    const data = await res.json();
+    let rows = (data.cart || []).map(c =>
+        `<tr><td>${c.item}</td><td class="text-end">$${c.price}</td><td class="text-center">${c.quantity}</td></tr>`
+    ).join("");
+    document.getElementById("cartResult").innerHTML = `
+        <div class="mb-1">Cart of user_id <strong>${data.user_id}</strong>:</div>
+        <table class="table table-sm"><thead><tr><th>Item</th><th class="text-end">Price</th><th class="text-center">Qty</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan=3 class="text-muted">empty</td></tr>'}</tbody></table>`;
+}
+
+// init
+refreshAuthUI();
+loadProducts();
+if (token()) loadCart();
+</script>
+{% endblock %}

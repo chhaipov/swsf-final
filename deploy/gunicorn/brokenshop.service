@@ -1,0 +1,25 @@
+; systemd unit for the Broken Shop app server (Module 6)
+; Copy to /etc/systemd/system/brokenshop.service, then:
+;   sudo systemctl daemon-reload
+;   sudo systemctl enable --now brokenshop
+;
+; Gunicorn listens ONLY on localhost. Nginx is the public front door and
+; reverse-proxies to it. The app server is never exposed directly.
+
+[Unit]
+Description=Broken Shop (gunicorn)
+After=network.target
+
+[Service]
+User=brokenshop
+Group=www-data
+WorkingDirectory=/opt/brokenshop
+Environment="DJANGO_SETTINGS_MODULE=dproject.settings"
+ExecStart=/opt/brokenshop/venv/bin/gunicorn \
+    --workers 3 \
+    --bind 127.0.0.1:8000 \
+    dproject.wsgi:application
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

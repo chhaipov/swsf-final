@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Broken Shop{% endblock %}
+
+{% block content %}
+<div class="hero p-4 p-md-5 mb-4">
+    <h1 class="fw-bold mb-1">Welcome back, {{ login_user }}!</h1>
+    {# VULN (Reflected XSS): 'getname' query param is rendered unescaped via |safe #}
+    {% if get_name %}<p class="mb-0 fs-5">Hello, {{ get_name|safe }} 👋</p>
+    {% else %}<p class="mb-0 opacity-75">Here's a look at what's in the shop today.</p>{% endif %}
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center py-3">
+            <div class="fs-3 fw-bold text-primary">{{ items|length }}</div>
+            <div class="small text-muted">Products</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center py-3">
+            <div class="fs-3 fw-bold text-primary"><i class="bi bi-truck"></i></div>
+            <div class="small text-muted">Free over $100</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center py-3">
+            <div class="fs-3 fw-bold text-primary"><i class="bi bi-arrow-repeat"></i></div>
+            <div class="small text-muted">30-day returns</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center py-3">
+            <div class="fs-3 fw-bold text-primary"><i class="bi bi-shield-lock"></i></div>
+            <div class="small text-muted">Secure checkout</div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h4 mb-0">Featured products</h2>
+    <a href="/item/" class="btn btn-sm btn-outline-primary">View all</a>
+</div>
+
+<div class="row g-4">
+    {% for item in items|slice:":8" %}
+    <div class="col-sm-6 col-lg-3">
+        <div class="card product-card shadow-sm h-100">
+            {% if item.image_url %}
+            <img src="{{ item.image_url }}" alt="{{ item.name }}" class="product-img">
+            {% endif %}
+            <div class="card-body">
+                <span class="badge cat-badge mb-2">{{ item.category }}</span>
+                <h3 class="h6">{{ item.name }}</h3>
+                <div class="price">${{ item.price }}</div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <p class="text-muted">No items found. Run <code>python manage.py seed</code>.</p>
+    {% endfor %}
+</div>
+{% endblock %}
